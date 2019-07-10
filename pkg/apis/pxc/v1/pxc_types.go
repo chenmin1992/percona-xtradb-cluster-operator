@@ -28,6 +28,7 @@ type PXCScheduledBackup struct {
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 	Schedule         []PXCScheduledBackupSchedule  `json:"schedule,omitempty"`
 	Storages         map[string]*BackupStorageSpec `json:"storages,omitempty"`
+	NodeSelector     map[string]string             `json:"nodeSelector,omitempty"`
 }
 
 type PXCScheduledBackupSchedule struct {
