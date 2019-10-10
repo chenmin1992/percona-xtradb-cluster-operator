@@ -1,8 +1,11 @@
 package v1
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 
+	v "github.com/hashicorp/go-version"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,6 +25,7 @@ type PerconaXtraDBClusterSpec struct {
 	PMM                   *PMMSpec                             `json:"pmm,omitempty"`
 	Backup                *PXCScheduledBackup                  `json:"backup,omitempty"`
 	UpdateStrategy        appsv1.StatefulSetUpdateStrategyType `json:"updateStrategy,omitempty"`
+	AllowUnsafeConfig     bool                                 `json:"allowUnsafeConfigurations,omitempty"`
 }
 
 type PXCScheduledBackup struct {
@@ -30,13 +34,18 @@ type PXCScheduledBackup struct {
 	Schedule           []PXCScheduledBackupSchedule  `json:"schedule,omitempty"`
 	Storages           map[string]*BackupStorageSpec `json:"storages,omitempty"`
 	ServiceAccountName string                        `json:"serviceAccountName,omitempty"`
+	Resources          *PodResources                 `json:"resources,omitempty"`
 }
 
 type PXCScheduledBackupSchedule struct {
-	Name        string `json:"name,omitempty"`
-	Schedule    string `json:"schedule,omitempty"`
-	Keep        int    `json:"keep,omitempty"`
-	StorageName string `json:"storageName,omitempty"`
+	Name              string              `json:"name,omitempty"`
+	Schedule          string              `json:"schedule,omitempty"`
+	Keep              int                 `json:"keep,omitempty"`
+	StorageName       string              `json:"storageName,omitempty"`
+	SchedulerName     string              `json:"schedulerName,omitempty"`
+	Affinity          *PodAffinity        `json:"affinity,omitempty"`
+	Tolerations       []corev1.Toleration `json:"tolerations,omitempty"`
+	PriorityClassName string              `json:"priorityClassName,omitempty"`
 }
 type AppState string
 
@@ -132,6 +141,7 @@ type PodSpec struct {
 	TerminationGracePeriodSeconds *int64                        `json:"gracePeriod,omitempty"`
 	ForceUnsafeBootstrap          bool                          `json:"forceUnsafeBootstrap,omitempty"`
 	ServiceType                   *corev1.ServiceType           `json:"serviceType,omitempty"`
+	SchedulerName                 string                        `json:"schedulerName,omitempty"`
 	ReadinessInitialDelaySeconds  *int32                        `json:"readinessDelaySec,omitempty"`
 	LivenessInitialDelaySeconds   *int32                        `json:"livenessDelaySec,omitempty"`
 }
@@ -152,10 +162,11 @@ type PodResources struct {
 }
 
 type PMMSpec struct {
-	Enabled    bool   `json:"enabled,omitempty"`
-	ServerHost string `json:"serverHost,omitempty"`
-	Image      string `json:"image,omitempty"`
-	ServerUser string `json:"serverUser,omitempty"`
+	Enabled    bool          `json:"enabled,omitempty"`
+	ServerHost string        `json:"serverHost,omitempty"`
+	Image      string        `json:"image,omitempty"`
+	ServerUser string        `json:"serverUser,omitempty"`
+	Resources  *PodResources `json:"resources,omitempty"`
 }
 
 type ResourcesList struct {
@@ -164,9 +175,11 @@ type ResourcesList struct {
 }
 
 type BackupStorageSpec struct {
-	Type   BackupStorageType   `json:"type"`
-	S3     BackupStorageS3Spec `json:"s3,omitempty"`
-	Volume *VolumeSpec         `json:"volume,omitempty"`
+	Type         BackupStorageType   `json:"type"`
+	S3           BackupStorageS3Spec `json:"s3,omitempty"`
+	Volume       *VolumeSpec         `json:"volume,omitempty"`
+	NodeSelector map[string]string   `json:"nodeSelector,omitempty"`
+	Resources    *PodResources       `json:"resources,omitempty"`
 }
 
 type BackupStorageType string
@@ -224,7 +237,7 @@ type ServerVersion struct {
 type App interface {
 	AppContainer(spec *PodSpec, secrets string) corev1.Container
 	SidecarContainers(spec *PodSpec, secrets string) []corev1.Container
-	PMMContainer(spec *PMMSpec, secrets string) corev1.Container
+	PMMContainer(spec *PMMSpec, secrets string, v120OrGreater bool) corev1.Container
 	Volumes(podSpec *PodSpec) *Volume
 	Resources(spec *PodResources) (corev1.ResourceRequirements, error)
 	Labels() map[string]string
@@ -253,6 +266,7 @@ func (cr *PerconaXtraDBCluster) CheckNSetDefaults() (changed bool, err error) {
 
 	c := cr.Spec
 	if c.PXC != nil {
+		c.PXC.AllowUnsafeConfig = c.AllowUnsafeConfig
 		if c.PXC.VolumeSpec == nil {
 			return false, fmt.Errorf("PXC: volumeSpec should be specified")
 		}
@@ -299,9 +313,14 @@ func (cr *PerconaXtraDBCluster) CheckNSetDefaults() (changed bool, err error) {
 		if c.Pause {
 			c.PXC.Size = 0
 		}
+
+		if c.PMM != nil {
+			c.PMM.Resources = c.PXC.Resources
+		}
 	}
 
 	if c.ProxySQL != nil && c.ProxySQL.Enabled {
+		c.ProxySQL.AllowUnsafeConfig = c.AllowUnsafeConfig
 		if c.ProxySQL.VolumeSpec == nil {
 			return false, fmt.Errorf("ProxySQL: volumeSpec should be specified")
 		}
@@ -366,6 +385,28 @@ func (cr *PerconaXtraDBCluster) CheckNSetDefaults() (changed bool, err error) {
 	}
 
 	return changed, nil
+}
+
+func (cr *PerconaXtraDBCluster) VersionLessThan120() bool {
+	apiVersion := cr.APIVersion
+	if lastCR, ok := cr.Annotations["kubectl.kubernetes.io/last-applied-configuration"]; ok {
+		var newCR PerconaXtraDBCluster
+		err := json.Unmarshal([]byte(lastCR), &newCR)
+		if err != nil {
+			return false
+		}
+		apiVersion = newCR.APIVersion
+	}
+	crVersion := strings.Replace(strings.TrimLeft(apiVersion, "pxc.percona.com/v"), "-", ".", -1)
+	checkVersion, err := v.NewVersion("1.2.0")
+	if err != nil {
+		return false
+	}
+	currentVersion, err := v.NewVersion(crVersion)
+	if err != nil {
+		return false
+	}
+	return currentVersion.LessThan(checkVersion)
 }
 
 const AffinityTopologyKeyOff = "none"

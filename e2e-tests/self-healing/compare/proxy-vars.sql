@@ -4,14 +4,14 @@ admin-checksum_mysql_servers	true
 admin-checksum_mysql_users	true
 admin-cluster_check_interval_ms	200
 admin-cluster_check_status_frequency	100
-admin-cluster_mysql_query_rules_diffs_before_sync	3
+admin-cluster_mysql_query_rules_diffs_before_sync	1
 admin-cluster_mysql_query_rules_save_to_disk	true
-admin-cluster_mysql_servers_diffs_before_sync	3
+admin-cluster_mysql_servers_diffs_before_sync	1
 admin-cluster_mysql_servers_save_to_disk	true
-admin-cluster_mysql_users_diffs_before_sync	3
+admin-cluster_mysql_users_diffs_before_sync	1
 admin-cluster_mysql_users_save_to_disk	true
 admin-cluster_password	admin_password
-admin-cluster_proxysql_servers_diffs_before_sync	3
+admin-cluster_proxysql_servers_diffs_before_sync	1
 admin-cluster_proxysql_servers_save_to_disk	true
 admin-cluster_username	proxyadmin
 admin-hash_passwords	true
@@ -27,16 +27,19 @@ admin-stats_system_memory	60
 admin-telnet_admin_ifaces	(null)
 admin-telnet_stats_ifaces	(null)
 admin-vacuum_stats	true
-admin-version	2.0.4-percona-1.2
+admin-version	2.0.6-percona-1.1
 admin-web_enabled	false
 admin-web_port	6080
 mysql-add_ldap_user_comment	
+mysql-auditlog_filename	
+mysql-auditlog_filesize	104857600
 mysql-auto_increment_delay_multiplex	5
 mysql-autocommit_false_is_transaction	false
 mysql-autocommit_false_not_reusable	false
 mysql-binlog_reader_connect_retry_msec	3000
 mysql-client_found_rows	true
 mysql-client_multi_statements	true
+mysql-client_session_track_gtid	true
 mysql-commands_stats	true
 mysql-connect_retries_delay	1
 mysql-connect_retries_on_failure	10
@@ -54,8 +57,10 @@ mysql-default_schema	information_schema
 mysql-default_sql_mode	
 mysql-default_time_zone	SYSTEM
 mysql-enforce_autocommit_on_reads	false
+mysql-eventslog_default_log	0
 mysql-eventslog_filename	
 mysql-eventslog_filesize	104857600
+mysql-eventslog_format	1
 mysql-forward_autocommit	false
 mysql-free_connections_pct	10
 mysql-have_compress	true
@@ -115,16 +120,18 @@ mysql-query_digests_lowercase	false
 mysql-query_digests_max_digest_length	2048
 mysql-query_digests_max_query_length	65000
 mysql-query_digests_normalize_digest_text	false
+mysql-query_digests_replace_null	false
 mysql-query_digests_track_hostname	false
 mysql-query_processor_iterations	0
 mysql-query_retries_on_failure	1
 mysql-reset_connection_algorithm	2
 mysql-server_capabilities	571947
-mysql-server_version	Percona XtraDB Cluster Operator 1.1.0
+mysql-server_version	5.7.26
 mysql-servers_stats	true
 mysql-session_idle_ms	1000
 mysql-session_idle_show_processlist	true
 mysql-sessions_sort	true
+mysql-set_query_lock_on_hostgroup	1
 mysql-show_processlist_extended	0
 mysql-shun_on_failures	5
 mysql-shun_recovery_time_sec	10

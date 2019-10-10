@@ -1,4 +1,4 @@
-apiVersion: pxc.percona.com/v1
+apiVersion: pxc.percona.com/v1-2-0
 kind: PerconaXtraDBCluster
 metadata:
   name: cluster1
@@ -10,12 +10,13 @@ spec:
   secretsName: my-cluster-secrets
   sslSecretName: my-cluster-ssl
   sslInternalSecretName: my-cluster-ssl-internal
+  allowUnsafeConfigurations: false
 #  pause: false
 #  updateStrategy: RollingUpdate
   pxc:
     size: 3
-    allowUnsafeConfigurations: false
-    image: percona/percona-xtradb-cluster-operator:1.1.0-pxc
+    image: percona/percona-xtradb-cluster-operator:1.2.0-pxc
+#    schedulerName: mycustom-scheduler
 #    readinessDelaySec: 15
 #    livenessDelaySec: 300
 #    forceUnsafeBootstrap: false
@@ -30,6 +31,7 @@ spec:
 #      iam.amazonaws.com/role: role-arn
 #    labels:
 #      rack: rack-22
+#   schedulerName: "default"
     resources:
       requests:
         memory: 1G
@@ -74,7 +76,8 @@ spec:
   proxysql:
     enabled: true
     size: 3
-    image: percona/percona-xtradb-cluster-operator:1.1.0-proxysql
+    image: percona/percona-xtradb-cluster-operator:1.2.0-proxysql
+#    schedulerName: mycustom-scheduler
 #    imagePullSecrets:
 #      - name: private-registry-credentials
 #    annotations:
@@ -82,6 +85,7 @@ spec:
 #    labels:
 #      rack: rack-22
 #    serviceType: ClusterIP
+#    schedulerName: "default"
     resources:
       requests:
         memory: 1G
@@ -126,23 +130,27 @@ spec:
     gracePeriod: 30
   pmm:
     enabled: false
-    image: perconalab/pmm-client:1.17.1
+    image: percona/percona-xtradb-cluster-operator:1.2.0-pmm
     serverHost: monitoring-service
     serverUser: pmm
   backup:
-    image: percona/percona-xtradb-cluster-operator:1.1.0-backup
+    image: percona/percona-xtradb-cluster-operator:1.2.0-backup
     serviceAccountName: percona-xtradb-cluster-operator
 #    imagePullSecrets:
 #      - name: private-registry-credentials
     storages:
       s3-us-west:
         type: s3
+#        nodeSelector:
+#          storage: tape
         s3:
           bucket: S3-BACKUP-BUCKET-NAME-HERE
           credentialsSecret: my-cluster-name-backup-s3
           region: us-west-2
       fs-pvc:
         type: filesystem
+#        nodeSelector:
+#          storage: tape
         volume:
           persistentVolumeClaim:
 #            storageClassName: standard

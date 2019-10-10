@@ -38,3 +38,4 @@ spec:
     enabled: true
     image: -pmm
     serverHost: monitoring-service
+    serverUser: admin

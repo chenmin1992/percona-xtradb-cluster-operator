@@ -108,6 +108,11 @@ func (r *ReconcilePerconaXtraDBClusterBackup) Reconcile(request reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
+	if instance.Status.State == api.BackupSucceeded || instance.Status.State == api.BackupFailed {
+		// Skip finished backups
+		return reconcile.Result{}, nil
+	}
+
 	cluster, err := r.getClusterConfig(instance)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("invalid backup cluster: %v", err)
@@ -133,7 +138,7 @@ func (r *ReconcilePerconaXtraDBClusterBackup) Reconcile(request reconcile.Reques
 	var destination string
 	var s3status *api.BackupStorageS3Spec
 
-	job.Spec = bcp.JobSpec(instance.Spec, r.serverVersion, cluster.Spec.SecretsName)
+	job.Spec = bcp.JobSpec(instance.Spec, r.serverVersion, cluster.Spec)
 	switch bcpStorage.Type {
 	case api.BackupStorageFilesystem:
 		pvc := backup.NewPVC(instance)

@@ -1,8 +1,8 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  generation: 1
-  name: monitoring-pxc
+  generation: 2
+  name: monitoring-proxysql
   ownerReferences:
   - apiVersion: pxc.percona.com/v1
     controller: true
@@ -10,21 +10,21 @@ metadata:
     name: monitoring
 spec:
   podManagementPolicy: OrderedReady
-  replicas: 3
+  replicas: 1
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      app.kubernetes.io/component: pxc
+      app.kubernetes.io/component: proxysql
       app.kubernetes.io/instance: monitoring
       app.kubernetes.io/managed-by: percona-xtradb-cluster-operator
       app.kubernetes.io/name: percona-xtradb-cluster
       app.kubernetes.io/part-of: percona-xtradb-cluster
-  serviceName: monitoring-pxc
+  serviceName: monitoring-proxysql-unready
   template:
     metadata:
       annotations:
       labels:
-        app.kubernetes.io/component: pxc
+        app.kubernetes.io/component: proxysql
         app.kubernetes.io/instance: monitoring
         app.kubernetes.io/managed-by: percona-xtradb-cluster-operator
         app.kubernetes.io/name: percona-xtradb-cluster
@@ -33,62 +33,33 @@ spec:
       containers:
       - env:
         - name: PXC_SERVICE
-          value: monitoring-pxc-unready
-        - name: MONITOR_HOST
-          value: '%'
+          value: monitoring-pxc
         - name: MYSQL_ROOT_PASSWORD
           valueFrom:
             secretKeyRef:
               key: root
               name: my-cluster-secrets
-        - name: XTRABACKUP_PASSWORD
+        - name: PROXY_ADMIN_USER
+          value: proxyadmin
+        - name: PROXY_ADMIN_PASSWORD
           valueFrom:
             secretKeyRef:
-              key: xtrabackup
+              key: proxyadmin
               name: my-cluster-secrets
         - name: MONITOR_PASSWORD
           valueFrom:
             secretKeyRef:
               key: monitor
               name: my-cluster-secrets
-        - name: CLUSTERCHECK_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              key: clustercheck
-              name: my-cluster-secrets
         imagePullPolicy: Always
-        livenessProbe:
-          exec:
-            command:
-            - /usr/bin/clustercheck.sh
-          failureThreshold: 3
-          initialDelaySeconds: 300
-          periodSeconds: 10
-          successThreshold: 1
-          timeoutSeconds: 5
-        name: pxc
+        name: proxysql
         ports:
         - containerPort: 3306
           name: mysql
           protocol: TCP
-        - containerPort: 4444
-          name: sst
+        - containerPort: 6032
+          name: proxyadm
           protocol: TCP
-        - containerPort: 4567
-          name: write-set
-          protocol: TCP
-        - containerPort: 4568
-          name: ist
-          protocol: TCP
-        readinessProbe:
-          exec:
-            command:
-            - /usr/bin/clustercheck.sh
-          failureThreshold: 5
-          initialDelaySeconds: 15
-          periodSeconds: 30
-          successThreshold: 1
-          timeoutSeconds: 15
         resources:
           requests:
             cpu: 300m
@@ -96,19 +67,22 @@ spec:
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
         volumeMounts:
-        - mountPath: /var/lib/mysql
-          name: datadir
-        - mountPath: /etc/mysql/conf.d
-          name: config
-        - mountPath: /tmp
-          name: tmp
-        - mountPath: /etc/mysql/ssl
+        - mountPath: /var/lib/proxysql
+          name: proxydata
+        - mountPath: /etc/proxysql/ssl
           name: ssl
-        - mountPath: /etc/mysql/ssl-internal
+        - mountPath: /etc/proxysql/ssl-internal
           name: ssl-internal
       - env:
         - name: PMM_SERVER
           value: monitoring-service
+        - name: PMM_USER
+          value: admin
+        - name: PMM_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: pmmserver
+              name: my-cluster-secrets
         - name: CLIENT_PORT_LISTEN
           value: "7777"
         - name: CLIENT_PORT_MIN
@@ -116,7 +90,14 @@ spec:
         - name: CLIENT_PORT_MAX
           value: "30105"
         - name: DB_TYPE
-          value: mysql
+          value: proxysql
+        - name: MONITOR_USER
+          value: monitor
+        - name: MONITOR_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: monitor
+              name: my-cluster-secrets
         - name: DB_USER
           value: monitor
         - name: DB_PASSWORD
@@ -124,14 +105,12 @@ spec:
             secretKeyRef:
               key: monitor
               name: my-cluster-secrets
-        - name: DB_ARGS
-          value: --query-source=perfschema
         - name: DB_CLUSTER
           value: pxc
         - name: DB_HOST
           value: localhost
         - name: DB_PORT
-          value: "3306"
+          value: "6032"
         imagePullPolicy: Always
         name: pmm-client
         ports:
@@ -155,9 +134,64 @@ spec:
             memory: 500M
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
-        volumeMounts:
-        - mountPath: /var/lib/mysql
-          name: datadir
+      - args:
+        - /usr/bin/peer-list
+        - -on-change=/usr/bin/add_pxc_nodes.sh
+        - -service=$(PXC_SERVICE)
+        env:
+        - name: PXC_SERVICE
+          value: monitoring-pxc
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: root
+              name: my-cluster-secrets
+        - name: PROXY_ADMIN_USER
+          value: proxyadmin
+        - name: PROXY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: proxyadmin
+              name: my-cluster-secrets
+        - name: MONITOR_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: monitor
+              name: my-cluster-secrets
+        imagePullPolicy: Always
+        name: pxc-monit
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      - args:
+        - /usr/bin/peer-list
+        - -on-change=/usr/bin/add_proxysql_nodes.sh
+        - -service=$(PROXYSQL_SERVICE)
+        env:
+        - name: PROXYSQL_SERVICE
+          value: monitoring-proxysql-unready
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: root
+              name: my-cluster-secrets
+        - name: PROXY_ADMIN_USER
+          value: proxyadmin
+        - name: PROXY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: proxyadmin
+              name: my-cluster-secrets
+        - name: MONITOR_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: monitor
+              name: my-cluster-secrets
+        imagePullPolicy: Always
+        name: proxysql-monit
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler
@@ -165,15 +199,8 @@ spec:
         fsGroup: 1001
         supplementalGroups:
         - 1001
-      terminationGracePeriodSeconds: 600
+      terminationGracePeriodSeconds: 30
       volumes:
-      - emptyDir: {}
-        name: tmp
-      - configMap:
-          defaultMode: 420
-          name: monitoring-pxc
-          optional: true
-        name: config
       - name: ssl-internal
         secret:
           defaultMode: 420
@@ -190,7 +217,7 @@ spec:
     type: RollingUpdate
   volumeClaimTemplates:
   - metadata:
-      name: datadir
+      name: proxydata
     spec:
       accessModes:
       - ReadWriteOnce

@@ -109,6 +109,13 @@ spec:
       - env:
         - name: PMM_SERVER
           value: monitoring-service
+        - name: PMM_USER
+          value: admin
+        - name: PMM_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: pmmserver
+              name: my-cluster-secrets
         - name: CLIENT_PORT_LISTEN
           value: "7777"
         - name: CLIENT_PORT_MIN
