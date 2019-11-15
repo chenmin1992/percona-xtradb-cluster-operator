@@ -143,7 +143,9 @@ type PodSpec struct {
 	ServiceType                   *corev1.ServiceType           `json:"serviceType,omitempty"`
 	SchedulerName                 string                        `json:"schedulerName,omitempty"`
 	ReadinessInitialDelaySeconds  *int32                        `json:"readinessDelaySec,omitempty"`
+	ReadinessFailureThreshold     *int32                        `json:"readinessFailureThreshold,omitempty"`
 	LivenessInitialDelaySeconds   *int32                        `json:"livenessDelaySec,omitempty"`
+	LivenessFailureThreshold      *int32                        `json:"livenessFailureThreshold,omitempty"`
 }
 
 type PodDisruptionBudgetSpec struct {

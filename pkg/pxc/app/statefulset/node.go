@@ -54,13 +54,21 @@ func NewNode(cr *api.PerconaXtraDBCluster) *Node {
 }
 
 func (c *Node) AppContainer(spec *api.PodSpec, secrets string) corev1.Container {
-	redinessDelay := int32(15)
+	readinessDelay := int32(15)
 	if spec.ReadinessInitialDelaySeconds != nil {
-		redinessDelay = *spec.ReadinessInitialDelaySeconds
+		readinessDelay = *spec.ReadinessInitialDelaySeconds
+	}
+	readinessFailureThreshold := int32(5)
+	if spec.ReadinessFailureThreshold != nil {
+		readinessFailureThreshold = *spec.ReadinessFailureThreshold
 	}
 	livenessDelay := int32(300)
 	if spec.LivenessInitialDelaySeconds != nil {
 		livenessDelay = *spec.LivenessInitialDelaySeconds
+	}
+	livenessFailureThreshold := int32(5)
+	if spec.LivenessFailureThreshold != nil {
+		livenessFailureThreshold = *spec.LivenessFailureThreshold
 	}
 
 	appc := corev1.Container{
@@ -68,15 +76,16 @@ func (c *Node) AppContainer(spec *api.PodSpec, secrets string) corev1.Container 
 		Image:           spec.Image,
 		ImagePullPolicy: corev1.PullAlways,
 		ReadinessProbe: app.Probe(&corev1.Probe{
-			InitialDelaySeconds: redinessDelay,
+			InitialDelaySeconds: readinessDelay,
 			TimeoutSeconds:      15,
 			PeriodSeconds:       30,
-			FailureThreshold:    5,
+			FailureThreshold:    readinessFailureThreshold,
 		}, "/usr/bin/clustercheck.sh"),
 		LivenessProbe: app.Probe(&corev1.Probe{
 			InitialDelaySeconds: livenessDelay,
 			TimeoutSeconds:      5,
 			PeriodSeconds:       10,
+			FailureThreshold:    livenessFailureThreshold,
 		}, "/usr/bin/clustercheck.sh"),
 		Ports: []corev1.ContainerPort{
 			{

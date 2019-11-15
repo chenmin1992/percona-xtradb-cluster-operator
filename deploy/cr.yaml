@@ -18,7 +18,9 @@ spec:
     image: percona/percona-xtradb-cluster-operator:1.2.0-pxc
 #    schedulerName: mycustom-scheduler
 #    readinessDelaySec: 15
-#    livenessDelaySec: 300
+#    readinessFailureThreshold: 50
+#    livenessDelaySec: 600
+#    livenessFailureThreshold: 5
 #    forceUnsafeBootstrap: false
 #    configuration: |
 #      [mysqld]
